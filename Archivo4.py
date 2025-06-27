@@ -3,8 +3,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import classification_report, roc_auc_score, roc_curve
+from sklearn.metrics import classification_report, roc_auc_score, roc_curve, confusion_matrix
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
@@ -13,7 +12,7 @@ from lightgbm import LGBMClassifier
 from imblearn.over_sampling import SMOTE
 
 # === Cargar datos ===
-df = pd.read_parquet('/Users/CARJ/Documents/ProjectAI3/driams.parquet')
+df = pd.read_parquet('driams2015_2017.parquet')
 X = df.iloc[:, 1:6001]
 y = df.iloc[:, 6001]
 
@@ -21,11 +20,6 @@ y = df.iloc[:, 6001]
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, stratify=y, random_state=42
 )
-
-# === Escalado para SVM ===
-scaler = StandardScaler()
-X_train_scaled = scaler.fit_transform(X_train)
-X_test_scaled = scaler.transform(X_test)
 
 # === SMOTE (opcional para Logistic Regression) ===
 smote = SMOTE(random_state=42)
@@ -47,14 +41,12 @@ results = {}
 fpr_dict = {}
 tpr_dict = {}
 auc_dict = {}
+cm_dict = {}
 
 for name, model in models.items():
     if name == 'LogReg SMOTE':
         model.fit(X_train_smote, y_train_smote)
         X_eval = X_test
-    elif name == 'SVM RBF':
-        model.fit(X_train_scaled, y_train)
-        X_eval = X_test_scaled
     else:
         model.fit(X_train, y_train)
         X_eval = X_test
@@ -76,12 +68,13 @@ for name, model in models.items():
     tpr_dict[name] = tpr
     auc_dict[name] = auc
 
-# === Mostrar métricas comparativas ===
-df_results = pd.DataFrame(results).T.round(3)
-print("\nResumen comparativo:\n")
-print(df_results)
+    cm = confusion_matrix(y_test, y_pred)
+    cm_dict[name] = cm
 
-# === Graficar curvas ROC ===
+# === Guardar métricas y matrices de confusión en Excel ===
+df_results = pd.DataFrame(results).T.round(3)
+
+# === Graficar y guardar figura de curvas ROC ===
 plt.figure(figsize=(10, 6))
 for name in models:
     plt.plot(fpr_dict[name], tpr_dict[name], label=f"{name} (AUC = {auc_dict[name]:.2f})")
@@ -92,4 +85,17 @@ plt.title('Curvas ROC - Comparación de Modelos')
 plt.legend(loc='lower right')
 plt.grid(True)
 plt.tight_layout()
-plt.show()
+roc_filename = 'curvas_roc.png'
+plt.savefig(roc_filename)
+plt.close()
+
+# === Crear archivo Excel ===
+with pd.ExcelWriter('resultados_modelos.xlsx', engine='xlsxwriter') as writer:
+    df_results.to_excel(writer, sheet_name='Métricas')
+    workbook = writer.book
+    worksheet = writer.sheets['Métricas']
+    worksheet.insert_image('G2', roc_filename)
+
+    for name, cm in cm_dict.items():
+        df_cm = pd.DataFrame(cm, index=['Real 0', 'Real 1'], columns=['Pred 0', 'Pred 1'])
+        df_cm.to_excel(writer, sheet_name=f'CM_{name[:30]}')  # evitar nombres largos
