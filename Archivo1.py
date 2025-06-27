@@ -5,7 +5,7 @@ import pandas as pd
 
 # Rutas
 folder_path = 'path/to/txt_folder'          # Folder con todos los .txt
-excel_path = 'path/to/excel_file.xlsx'      # Excel con S. aureus el nombre de los archivos de S. aureus
+excel_path = 'path/to/excel_file.xlsx'      # Excel con el nombre de los archivos de S. aureus
 
 # Cargar los filenames desde Excel
 df = pd.read_excel(excel_path)
